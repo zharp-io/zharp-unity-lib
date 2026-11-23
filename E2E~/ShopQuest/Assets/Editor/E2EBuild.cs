@@ -53,7 +53,12 @@ public static class E2EBuild
             PlayerSettings.iOS.sdkVersion = iOSSdkVersion.SimulatorSDK;
             PlayerSettings.iOS.targetOSVersionString = "15.0";
         }
-        if (target == BuildTarget.WebGL) PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+        if (target == BuildTarget.WebGL)
+        {
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+            // The default (explicitly thrown exceptions only) has no NullReferenceException at all.
+            PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.FullWithStacktrace;
+        }
 
         string output = Arg("-customBuildPath") ?? Path.Combine("Builds", target.ToString(), target == BuildTarget.StandaloneWindows64 ? "ShopQuest.exe" : target == BuildTarget.Android ? "ShopQuest.apk" : "ShopQuest");
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions

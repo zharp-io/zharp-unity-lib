@@ -84,7 +84,7 @@ if scenario in ("error", "web"):
     handled = [e for e in of_type("Error") if e["a"]["zharp.handled"] == "true"]
     expect(len(handled) == 1, "CaptureError once")
     for e in handled:
-        expect("Shop.Checkout" in e["a"]["exception.stacktrace"].split("\n")[1], "handled error starts at the game's frame, not Zharp's: %s" % e["a"]["exception.stacktrace"])
+        expect("Shop.Checkout" in (e["a"]["exception.stacktrace"].split("\n") + [""])[1], "handled error starts at the game's frame, not Zharp's: %s" % e["a"]["exception.stacktrace"])
         expect(str(e["a"].get("slot")) in ("2", "2.0"), "the error's own attribute")
     caught = [e for e in of_type("ArgumentOutOfRangeException") if e["a"]["zharp.handled"] == "true"]
     expect(len(caught) == 1, "CaptureException once: got %d" % len(caught))

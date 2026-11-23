@@ -5,7 +5,10 @@ using System.Text.RegularExpressions;
 
 namespace ZharpCore
 {
-    /// <summary>A frame of a Unity stack: "Shop.Cart.Total () (at Assets/Scripts/Cart.cs:12)".</summary>
+    /// <summary>
+    /// A frame of a Unity stack: "Shop.Cart.Total () (at Assets/Scripts/Cart.cs:12)"; an IL2CPP
+    /// player writes a log's call stack without the space ("Shop.Cart:Total() (at …)").
+    /// </summary>
     internal struct Frame
     {
         public string Text;
@@ -54,8 +57,8 @@ namespace ZharpCore
     /// <summary>Unity's stack strings, as <c>Application.logMessageReceivedThreaded</c> gives them.</summary>
     internal static class Stacks
     {
-        static readonly Regex Located = new Regex(@"^(\S+) \(([^()]*)\) \(at (.+):(-?\d+)\)$", RegexOptions.CultureInvariant);
-        static readonly Regex Bare = new Regex(@"^([\w`<>$|+\[\],.]+?[.:][\w`<>$|+\[\],]+) \(([^()]*)\)$", RegexOptions.CultureInvariant);
+        static readonly Regex Located = new Regex(@"^(\S+?) ?\(([^()]*)\) \(at (.+):(-?\d+)\)$", RegexOptions.CultureInvariant);
+        static readonly Regex Bare = new Regex(@"^([\w`<>$|+\[\],.]+?[.:][\w`<>$|+\[\],]+) ?\(([^()]*)\)$", RegexOptions.CultureInvariant);
         static readonly Regex Mono = new Regex(@"^at\s+(\S+) \((.*?)\)(?: \[0x[0-9a-f]+\])?(?: in (.+?):(\d+))?\s*$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         /// <summary>"NullReferenceException: …", "Shop.CartException: …", "UnityEngine.MissingReferenceException: …".</summary>
         static readonly Regex Head = new Regex(@"^([A-Za-z_][\w.`+]*)(?::\s?(.*))?$", RegexOptions.CultureInvariant | RegexOptions.Singleline);

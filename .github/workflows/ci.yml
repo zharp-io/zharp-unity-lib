@@ -73,6 +73,7 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: StandaloneLinux64
           buildMethod: E2EBuild.Build
+          buildName: ShopQuest
           # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
           versioning: None
           buildsPath: build
@@ -114,6 +115,7 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: WebGL
           buildMethod: E2EBuild.Build
+          buildName: ShopQuest
           # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
           versioning: None
           buildsPath: build
@@ -154,6 +156,7 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: StandaloneWindows64
           buildMethod: E2EBuild.Build
+          buildName: ShopQuest
           # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
           versioning: None
           buildsPath: build
@@ -186,6 +189,7 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: iOS
           buildMethod: E2EBuild.Build
+          buildName: ShopQuest
           # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
           versioning: None
           buildsPath: build
@@ -256,6 +260,7 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: Android
           buildMethod: E2EBuild.Build
+          buildName: ShopQuest
           # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
           versioning: None
           buildsPath: build

@@ -183,6 +183,23 @@ namespace CoreTests
         }
 
         [Fact]
+        public void ReadsAnIl2cppPlayersLogCallStack()
+        {
+            // As an IL2CPP player hands a log's stack to logMessageReceived: no space before "(".
+            var frames = Stacks.WithoutOwnFrames(Stacks.Parse(
+                "Zharp:CaptureError(String, IDictionary`2, String) (at /github/workspace/Runtime/Zharp.cs:61)\n" +
+                "Shop.Checkout:Save(Int32) (at /github/workspace/Assets/Scripts/Shop/Checkout.cs:29)\n" +
+                "<Start>d__3:MoveNext() (at /github/workspace/Assets/Scripts/Scenario.cs:30)\n" +
+                "UnityEngine.SetupCoroutine:InvokeMoveNext(IEnumerator, IntPtr)"));
+            Assert.Equal(3, frames.Count);
+            Assert.Equal("Shop.Checkout:Save", frames[0].Function);
+            Assert.Equal("/github/workspace/Assets/Scripts/Shop/Checkout.cs", frames[0].File);
+            Assert.Equal(29, frames[0].Line);
+            Assert.Equal("<Start>d__3:MoveNext", frames[1].Function);
+            Assert.Equal("UnityEngine.SetupCoroutine:InvokeMoveNext", frames[2].Function);
+        }
+
+        [Fact]
         public void FindsTheProjectPathWhereverTheBuildRan()
         {
             Assert.Equal("Assets/Scripts/Cart.cs", Stacks.ProjectPath("/home/runner/work/shop/Assets/Scripts/Cart.cs"));

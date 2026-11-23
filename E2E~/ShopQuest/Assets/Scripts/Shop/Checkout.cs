@@ -8,18 +8,18 @@ namespace Shop
         public string Name;
     }
 
-    /// <summary>The game code the e2e errors come from: check.py expects these lines.</summary>
+    /// <summary>The game code the e2e errors come from: check.py expects these lines (not inlined: AddToCart stays a frame).</summary>
     public static class Checkout
     {
         static List<Item> cart;
 
-        public static void Open()
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] public static void Open()
         {
             Debug.LogWarning("Coupon SPRING expired");
             AddToCart(new Item { Name = "sword" });
         }
 
-        static void AddToCart(Item item)
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void AddToCart(Item item)
         {
             cart.Add(item); // line 24: cart is null
         }
