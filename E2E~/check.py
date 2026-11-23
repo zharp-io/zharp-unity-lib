@@ -152,8 +152,12 @@ elif scenario == "minidump":
         expect(len(d["fields"].get("zharp.session_id", "")) == 32, "the crashed run's session")
         expect(d["fields"].get("zharp.user.id") == "player-42", "the crashed run's player")
         expect(d["fields"].get("screen.name") == "Level", "the crashed run's scene")
-        # Mono names the managed frames (ForceCrash); IL2CPP only native ones: the stack itself is checked.
-        expect("END OF STACKTRACE" in d["fields"].get("unity.player_log", ""), "the player log's end, with the crash's stack")
+        # The player log, when the crash folder has one (6000.0 copies it; 6000.3 on CI left only
+        # crash.dmp): its end is the crash's stack. Mono names managed frames there, IL2CPP native ones.
+        if "unity.player_log" in d["fields"]:
+            expect("END OF STACKTRACE" in d["fields"]["unity.player_log"], "the player log's end, with the crash's stack")
+        else:
+            print("note: no player log in the crash folder")
     expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
     expect(not of_type("ApplicationNotResponding"), "no hang for the freeze while the crash handler wrote the dump")
 elif scenario == "upload":

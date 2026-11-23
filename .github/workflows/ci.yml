@@ -235,7 +235,10 @@ jobs:
             python3 "E2E~/receiver.py" "$out" 4318 > "$out/receiver.log" 2>&1 & local r=$!; sleep 1
             for m in "$@"; do
               SIMCTL_CHILD_ZHARP_E2E_MODE=$m xcrun simctl launch --terminate-running-process "$DEVICE" io.zharp.e2e.shopquest
-              for i in $(seq 1 120); do grep -q "^$m$" "$out/done.txt" 2>/dev/null && break; [ "$m" = crash ] && [ $i -gt 8 ] && break; sleep 2; done
+              want=$m; [ "$m" = crash ] && want=crashing
+              for i in $(seq 1 120); do grep -q "^$want$" "$out/done.txt" 2>/dev/null && break; sleep 2; done
+              # crash: a moment for the crash itself; after: for the iOS SDK to send what it saved.
+              [ "$m" = crash ] && sleep 5; [ "$m" = after ] && sleep 15
               xcrun simctl terminate "$DEVICE" io.zharp.e2e.shopquest || true
             done
             kill $r; touch "$out/received.jsonl" "$out/requests.jsonl"

@@ -14,7 +14,10 @@ run() { # out dir, modes…
   python3 "$HERE/receiver.py" "$out" 4318 > "$out/receiver.log" 2>&1 & local r=$!; sleep 1
   for m in "$@"; do
     adb shell am start -W -n "$ACTIVITY" --es mode "$m"
-    for i in $(seq 1 60); do grep -q "^$m$" "$out/done.txt" 2>/dev/null && break; [ "$m" = crash ] && [ $i -gt 8 ] && break; sleep 2; done
+    want=$m; [ "$m" = crash ] && want=crashing
+    for i in $(seq 1 120); do grep -q "^$want$" "$out/done.txt" 2>/dev/null && break; sleep 2; done
+    # crash: a moment for the crash itself; after: for the iOS SDK to send what it saved.
+    [ "$m" = crash ] && sleep 5; [ "$m" = after ] && sleep 15
     adb shell am force-stop "$PKG"
   done
   kill $r; touch "$out/received.jsonl" "$out/requests.jsonl"

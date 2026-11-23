@@ -52,6 +52,8 @@ public class Scenario : MonoBehaviour
             case "crash":
                 yield return new WaitForSeconds(1);
                 Debug.Log("[e2e] crashing");
+                // A phone or simulator can't be watched for the crash: the runner waits for this.
+                using (var crashing = UnityWebRequest.Get(Receiver() + "/e2e/done?mode=crashing")) yield return crashing.SendWebRequest();
                 Utils.ForceCrash(ForcedCrashCategory.AccessViolation);
                 break;
             case "hang-crash":
