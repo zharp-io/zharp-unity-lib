@@ -299,7 +299,38 @@ namespace ZharpCore
         /// frozen) is dropped when that run's crash was found, since the freeze was the crash on its
         /// way down; otherwise (a clean quit, a kill, no crash report) it's sent.
         /// </summary>
-        public void SettlePreviousHang(bool crashed) => ReleasePendingHang(!crashed, crashed ? "the previous run crashed while frozen: hang dropped" : "the previous run's hang sent");
+        public void SettlePreviousHang(bool crashed)
+        {
+            string hang = TakePendingHang();
+            if (hang == null) return;
+            if (crashed) DebugLog("the previous run crashed while frozen: hang dropped");
+            else SendHang(hang);
+        }
+
+        /// <summary>The previous run's pending hang, taken off disk (null: none), to settle once its crash is known.</summary>
+        public string TakePendingHang()
+        {
+            lock (hangGate)
+            {
+                try
+                {
+                    if (!File.Exists(PendingHangPath)) return null;
+                    string body = File.ReadAllText(PendingHangPath);
+                    File.Delete(PendingHangPath);
+                    return body;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
+        }
+
+        public void SendHang(string body)
+        {
+            Outbox.Write("logs", body);
+            DebugLog("the previous run's hang sent");
+        }
 
         public bool HasPendingHang
         {

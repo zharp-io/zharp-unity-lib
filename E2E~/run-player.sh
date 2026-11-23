@@ -14,10 +14,18 @@ case "$OS" in
 esac
 GUID="$(dirname "$PLAYER")/build-guid.txt"
 FAILED=0
+# A Linux player of Unity 6 crashes (SIGSEGV) right after the first scene's Awake when there's no X
+# display, even with -nographics and with Zharp disabled: run on a virtual one.
+DISPLAY_WRAP=()
+if [ "$OS" = linux ] && [ -z "${DISPLAY:-}" ] && command -v xvfb-run > /dev/null; then DISPLAY_WRAP=(xvfb-run -a); fi
 
 launch() { # mode, log name, [extra env]
   local mode="$1" name="$2"; shift 2
-  env ZHARP_E2E_MODE="$mode" "$@" timeout 90 "$PLAYER" -batchmode -nographics -logFile "$OUT/$name.log" || true
+  env ZHARP_E2E_MODE="$mode" "$@" "${DISPLAY_WRAP[@]}" timeout 90 "$PLAYER" -batchmode -nographics -logFile "$OUT/$name.log" || true
+  # Windows: Unity's crash handler, a process of its own, may still be writing the crash folder.
+  if [ "$OS" = windows ]; then
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$HERE/wait-crash-handler.ps1")" "$(cygpath -w "$(dirname "$PLAYER")")"
+  fi
 }
 
 scenario() { # name, check, modes…

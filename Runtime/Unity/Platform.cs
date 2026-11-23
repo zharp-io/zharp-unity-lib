@@ -92,12 +92,36 @@ namespace ZharpUnity
     /// </summary>
     internal static class NativeCrashes
     {
-        /// <summary>Whether the previous run's crash was found (its report is on its way).</summary>
-        public static bool Check(Runtime runtime, RunMarker previous)
+        /// <summary>
+        /// How long a launch waits for the previous run's crash folder on Windows: Unity's crash
+        /// handler is a process of its own, and may still be writing the dump when the game is
+        /// started again.
+        /// </summary>
+        public const float CrashHandlerWait = 20;
+
+        sealed class Waiting
+        {
+            public RunMarker Previous;
+            public string Hang;
+            public string Root;
+            public DateTime Since;
+            public float Until;
+            public float NextLook;
+        }
+
+        static Waiting waiting;
+
+        public static void Reset() => waiting = null;
+
+        /// <summary>
+        /// On launch: the previous run's crash, and its pending hang, which is dropped when the run's
+        /// crash is found (the freeze was the crash on its way down) and sent otherwise.
+        /// </summary>
+        public static void Check(Runtime runtime, RunMarker previous)
         {
             Client client = runtime.Client;
-            bool native = client.Settings.NativeCrashes;
-            if (native && Platform.IsWindowsPlayer)
+            string hang = client.TakePendingHang();
+            if (client.Settings.NativeCrashes && Platform.IsWindowsPlayer)
             {
                 string root = CrashFolders.RootFor(Path.GetTempPath(), Application.companyName, Application.productName);
                 DateTime since = previous != null && previous.Started > 0
@@ -106,15 +130,55 @@ namespace ZharpUnity
                 string folder = CrashFolders.Newest(root, since);
                 if (folder != null)
                 {
-                    Upload(runtime, previous, folder);
-                    return true;
+                    Crashed(runtime, previous, folder, hang);
+                    return;
+                }
+                if (previous != null && previous.WorthReporting)
+                {
+                    float now = Time.realtimeSinceStartup;
+                    waiting = new Waiting { Previous = previous, Hang = hang, Root = root, Since = since, Until = now + CrashHandlerWait, NextLook = now + 1 };
+                    runtime.Debug("the previous run didn't quit: waiting for Unity's crash handler");
+                    return;
                 }
             }
-            if (previous == null || !previous.WorthReporting) return false;
-            if (native && Platform.IsIosPlayer) return false;
+            NoCrash(runtime, previous, hang);
+        }
+
+        /// <summary>Every frame while waiting for a crash folder; <paramref name="final"/> when the game quits first.</summary>
+        public static void Poll(Runtime runtime, bool final = false)
+        {
+            Waiting w = waiting;
+            if (w == null) return;
+            float now = Time.realtimeSinceStartup;
+            if (!final && now < w.NextLook) return;
+            w.NextLook = now + 1;
+            string folder = CrashFolders.Newest(w.Root, w.Since);
+            if (folder != null)
+            {
+                waiting = null;
+                Crashed(runtime, w.Previous, folder, w.Hang);
+            }
+            else if (final || now >= w.Until)
+            {
+                waiting = null;
+                NoCrash(runtime, w.Previous, w.Hang);
+            }
+        }
+
+        static void Crashed(Runtime runtime, RunMarker previous, string folder, string hang)
+        {
+            if (hang != null) runtime.Debug("the previous run crashed while frozen: hang dropped");
+            Upload(runtime, previous, folder);
+        }
+
+        static void NoCrash(Runtime runtime, RunMarker previous, string hang)
+        {
+            Client client = runtime.Client;
+            if (hang != null) client.SendHang(hang);
+            if (previous == null || !previous.WorthReporting) return;
+            if (client.Settings.NativeCrashes && Platform.IsIosPlayer) return;
             client.ReportUncleanExit(previous);
             runtime.Debug("the previous run didn't quit: sending it as an UncleanExit");
-            return false;
         }
 
         static void Upload(Runtime runtime, RunMarker previous, string folder)

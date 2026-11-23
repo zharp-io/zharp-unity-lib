@@ -87,30 +87,6 @@ jobs:
           GUID_FILE=$(find build -name build-guid.txt | head -1)
           touch out/upload/received.jsonl
           python3 "E2E~/check.py" upload out/upload/received.jsonl "" "$GUID_FILE"
-      - name: Diagnose the player's start (temporary)
-        continue-on-error: true
-        run: |
-          pkill -f receiver.py || true
-          PLAYER=$(find build -type f -name 'ShopQuest*' ! -name '*.so' ! -name '*.txt' | head -1)
-          chmod +x "$PLAYER"
-          mkdir -p out/diag
-          set +e
-          try() { # name, command…
-            local name=$1; shift
-            timeout 60 "$@" -logFile "out/diag/$name.log" > /dev/null 2>&1; echo "== $name: exit $?"; tail -4 "out/diag/$name.log"
-          }
-          try zharp-off env ZHARP_ENABLED=false ZHARP_E2E_MODE=logs "$PLAYER" -batchmode -nographics
-          try nographics env ZHARP_E2E_MODE=logs "$PLAYER" -batchmode -nographics
-          try xvfb-nographics env ZHARP_E2E_MODE=logs xvfb-run -a "$PLAYER" -batchmode -nographics
-          try xvfb-graphics env ZHARP_E2E_MODE=logs xvfb-run -a "$PLAYER" -batchmode
-          try xvfb-window env ZHARP_E2E_MODE=logs xvfb-run -a "$PLAYER" -screen-fullscreen 0
-          if command -v gdb >/dev/null; then
-            ZHARP_ENABLED=false ZHARP_E2E_MODE=logs timeout 120 gdb -q -batch -ex 'handle SIGPWR SIGXCPU SIG35 SIG36 SIGUSR1 SIGUSR2 nostop noprint pass' -ex run -ex bt -ex 'info symbol $pc' \
-              --args "$PLAYER" -batchmode -nographics -logFile out/diag/gdb.log 2>&1 | grep -v "^\[New Thread\|^\[Thread" | tail -40
-          else
-            echo "no gdb"
-          fi
-          exit 0
       - name: Player scenarios
         run: |
           pkill -f receiver.py || true

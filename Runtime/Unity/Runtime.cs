@@ -41,6 +41,7 @@ namespace ZharpUnity
         {
             current?.Shutdown(false);
             current = null;
+            NativeCrashes.Reset();
         }
 
         // As early as a scene can't be: errors in the first scene's Awake are seen.
@@ -117,8 +118,7 @@ namespace ZharpUnity
         {
             Settings s = Client.Settings;
             RunMarker previous = Platform.UsesRunMarker ? Client.TakePreviousRun() : null;
-            bool crashed = NativeCrashes.Check(this, previous);
-            Client.SettlePreviousHang(crashed);
+            NativeCrashes.Check(this, previous);
             if (Platform.UsesRunMarker) Client.WriteMarker();
 
             Application.logMessageReceivedThreaded += OnLog;
@@ -157,6 +157,7 @@ namespace ZharpUnity
                 Scene active = SceneManager.GetActiveScene();
                 if (active.IsValid() && active.name.Length > 0) ScreenShown(active.name, "scene");
             }
+            NativeCrashes.Poll(this);
             Client.Tick();
             Transport.Pump();
         }
@@ -195,6 +196,7 @@ namespace ZharpUnity
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
             Application.quitting -= OnQuitting;
             watchdog?.Stop();
+            NativeCrashes.Poll(this, final: true);
             Client.Persist();
             Client.Session.Save();
             if (clean) Client.ClearMarker();
