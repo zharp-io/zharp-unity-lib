@@ -84,7 +84,7 @@ if scenario in ("error", "web"):
         expect("key=[Filtered]" in s["a"].get("url.full", ""), "the URL's key filtered")
         expect(s["a"].get("http.response.status_code") == "200" or s["a"].get("http.response.status_code") == 200, "status code")
     game = [r for r in requests if r["path"].startswith("/game/")]
-    expect(len(game) == 1 and client and game[0]["headers"].get("traceparent", "").split("-")[1:3] == [client[0]["trace"], client[0]["id"]],
+    expect(len(game) == 1 and client and {k.lower(): v for k, v in game[0]["headers"].items()}.get("traceparent", "").split("-")[1:3] == [client[0]["trace"], client[0]["id"]],
            "traceparent sent with the request's span")
     expect(any(s["name"] == "screen Level" for s in spans), "a screen span for the scene")
     if scenario == "web":
