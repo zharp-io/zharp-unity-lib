@@ -54,6 +54,9 @@ def common(error_list):
         expect(len(e["a"].get("session.id", "")) == 32, "session.id")
         expect(e["a"].get("enduser.id") == "player-42", "enduser.id on " + e["body"])
         expect(e["a"].get("screen.name") == "Level", "screen.name = the scene, on " + e["body"])
+        env = os.environ.get("ZHARP_ENVIRONMENT")
+        if env:
+            expect(r.get("deployment.environment.name") == env, "deployment.environment.name = ZHARP_ENVIRONMENT (%s): %s" % (env, r.get("deployment.environment.name")))
         if guid:
             expect(e["a"].get("zharp.build_id") == guid, "zharp.build_id = the build's GUID (%s): %s" % (guid, e["a"].get("zharp.build_id")))
     for entry in entries:
@@ -66,17 +69,32 @@ if scenario in ("error", "web"):
     expect(len(nre) == 1, "one NullReferenceException (Update threw once): got %d" % len(nre))
     for e in nre:
         stack = e["a"]["exception.stacktrace"].split("\n")
-        expect(any("Shop.Checkout.AddToCart" in line for line in stack[1:2]), "the top frame is AddToCart: %s" % stack[:3])
-        if scenario == "error":
-            expect(any("Checkout.cs:24" in line for line in stack), "IL2CPP line numbers: Checkout.cs:24 in %s" % stack[:3])
+        # Mono's JIT inlines AddToCart into Open (the frame is then Open's call to it, Checkout.cs:19);
+        # a Mono release player has no line numbers at all.
+        mono = e["resource"].get("unity.scripting_backend") == "mono"
+        mono_release = mono and e["resource"].get("unity.build") == "release"
+        top = ("Shop.Checkout.AddToCart", "Shop.Checkout.Open") if mono else ("Shop.Checkout.AddToCart",)
+        expect(any(t in line for t in top for line in stack[1:2]), "the top frame is AddToCart: %s" % stack[:3])
+        if scenario == "error" and not mono_release:
+            lines = ("Checkout.cs:24", "Checkout.cs:19") if mono else ("Checkout.cs:24",)
+            expect(any(n in line for n in lines for line in stack[1:2]), "line numbers: Checkout.cs:24 in %s" % stack[:3])
         expect(e["a"]["zharp.handled"] == "false", "unhandled")
         expect("Coupon SPRING expired" in e["a"].get("zharp.breadcrumbs", ""), "the warning as a breadcrumb")
+        expect("Inventory out of sync" in e["a"].get("zharp.breadcrumbs", ""), "Debug.LogError as a breadcrumb")
     handled = [e for e in of_type("Error") if e["a"]["zharp.handled"] == "true"]
     expect(len(handled) == 1, "CaptureError once")
     for e in handled:
         expect("Shop.Checkout" in e["a"]["exception.stacktrace"].split("\n")[1], "handled error starts at the game's frame, not Zharp's: %s" % e["a"]["exception.stacktrace"])
         expect(str(e["a"].get("slot")) in ("2", "2.0"), "the error's own attribute")
-    common(nre + handled)
+    caught = [e for e in of_type("ArgumentOutOfRangeException") if e["a"]["zharp.handled"] == "true"]
+    expect(len(caught) == 1, "CaptureException once: got %d" % len(caught))
+    for e in caught:
+        stack = e["a"]["exception.stacktrace"].split("\n")
+        expect(any("Shop.Checkout.Charge" in line for line in stack[1:2]), "the caught exception's top frame is Charge: %s" % stack[:3])
+        expect(any("Shop.Checkout.Pay" in line for line in stack), "then Pay: %s" % stack[:4])
+        expect(str(e["a"].get("coins")) in ("0", "0.0"), "CaptureException's own attribute")
+    expect(not [e for e in errors if "Inventory out of sync" in e["body"]], "Debug.LogError is no error while logErrors is off")
+    common(nre + handled + caught)
     client = [s for s in spans if s["kind"] == 3]
     expect(len(client) == 1, "one client span for the request")
     for s in client:
@@ -123,6 +141,7 @@ elif scenario == "minidump":
         expect(len(d["fields"].get("zharp.session_id", "")) == 32, "the crashed run's session")
         expect(d["fields"].get("zharp.user.id") == "player-42", "the crashed run's player")
         expect(d["fields"].get("screen.name") == "Level", "the crashed run's scene")
+        expect("ForceCrash" in d["fields"].get("unity.player_log", ""), "the player log's end, with the crash's stack")
     expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
 elif scenario == "upload":
     uploads = [e for e in entries if e["path"] == "/api/v1/applications/42/artifacts"]

@@ -28,5 +28,22 @@ namespace Shop
         {
             Zharp.CaptureError("Save failed: disk full", new Dictionary<string, object> { ["slot"] = slot });
         }
+
+        public static void Pay(int coins)
+        {
+            try
+            {
+                Charge(coins);
+            }
+            catch (System.ArgumentException e)
+            {
+                Zharp.CaptureException(e, new Dictionary<string, object> { ["coins"] = coins });
+            }
+        }
+
+        static void Charge(int coins)
+        {
+            if (coins <= 0) throw new System.ArgumentOutOfRangeException(nameof(coins), "Nothing to pay");
+        }
     }
 }

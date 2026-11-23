@@ -8,7 +8,8 @@ using UnityEngine;
 
 /// <summary>
 /// Builds the e2e player (GameCI's buildMethod): the scene with the Scenario, Zharp's settings
-/// pointing at the stand-in receiver, "Shop Quest" 1.4.0, IL2CPP where the platform has it.
+/// pointing at the stand-in receiver, "Shop Quest" 1.4.0, IL2CPP where the platform has it
+/// (-zharpBackend mono for Mono; -zharpBuild development for a development build).
 /// </summary>
 public static class E2EBuild
 {
@@ -36,11 +37,16 @@ public static class E2EBuild
         PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
         PlayerSettings.runInBackground = true;
         var named = NamedBuildTarget.FromBuildTargetGroup(BuildPipeline.GetBuildTargetGroup(target));
-        if (target != BuildTarget.WebGL) PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
+        // IL2CPP where the platform has it; -zharpBackend mono for an Editor without the IL2CPP module.
+        if (target != BuildTarget.WebGL)
+            PlayerSettings.SetScriptingBackend(named, Arg("-zharpBackend") == "mono" ? ScriptingImplementation.Mono2x : ScriptingImplementation.IL2CPP);
         if (target == BuildTarget.Android)
         {
+            // x86_64 for CI's emulator; obsolete (and dropped) in later Unity 6 releases.
+#pragma warning disable CS0618
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.X86_64;
-            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
+#pragma warning restore CS0618
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
         }
         if (target == BuildTarget.iOS)
         {
@@ -55,7 +61,7 @@ public static class E2EBuild
             scenes = new[] { "Assets/Scenes/Level.unity" },
             locationPathName = output,
             target = target,
-            options = BuildOptions.None,
+            options = Arg("-zharpBuild") == "development" ? BuildOptions.Development : BuildOptions.None,
         });
         Debug.Log("[e2e] build " + report.summary.result + " guid " + report.summary.guid + " to " + output);
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(output)) ?? ".", "build-guid.txt"), report.summary.guid.ToString());

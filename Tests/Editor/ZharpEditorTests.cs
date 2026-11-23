@@ -22,7 +22,7 @@ namespace ZharpTests
             Assert.AreEqual("InvalidOperationException", d.Type);
             Assert.AreEqual("Cart is empty", d.Message);
             Assert.That(d.Frames.Count, Is.GreaterThan(0));
-            StringAssert.Contains("Thrower", d.Frames[0].Function);
+            StringAssert.Contains("Thrower", d.Frames[0].Function, text);
             StringAssert.EndsWith("ZharpEditorTests.cs", d.Frames[0].File);
             Assert.That(d.Frames[0].Line, Is.GreaterThan(0));
         }
@@ -32,6 +32,19 @@ namespace ZharpTests
         {
             List<Frame> frames = Stacks.Parse(StackTraceUtility.ExtractStackTrace());
             Assert.That(frames.Any(f => f.Function.Contains("ReadsTheCallStackUnityWritesForALog")), "frames: " + string.Join(" | ", frames.Select(f => f.Text)));
+        }
+
+        [Test]
+        public void StartsAHandledErrorAtTheGamesFrameInAPlayer()
+        {
+            // StackTraceUtility.ExtractStackTrace() in a player, called from Zharp.CaptureError.
+            List<Frame> frames = Stacks.WithoutOwnFrames(Stacks.Parse(
+                "UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)\n" +
+                "UnityEngine.StackTraceUtility:ExtractStackTrace ()\n" +
+                "Zharp:CaptureError (string,System.Collections.Generic.IDictionary`2<string, object>,string)\n" +
+                "Shop.Checkout:Save (int)\n" +
+                "UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr)"));
+            Assert.AreEqual("Shop.Checkout:Save", frames[0].Function);
         }
 
         [Test]
@@ -60,6 +73,8 @@ namespace ZharpTests
 
         static class Thrower
         {
+            // Not inlined: the Editor may run scripts with Release code optimization.
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
             public static void Throw() => throw new System.InvalidOperationException("Cart is empty");
         }
     }

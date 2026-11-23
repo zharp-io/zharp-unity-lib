@@ -28,6 +28,8 @@ public class Scenario : MonoBehaviour
         {
             case "error":
                 Shop.Checkout.Save(2);
+                Shop.Checkout.Pay(0); // caught: Zharp.CaptureException
+                Debug.LogError("Inventory out of sync: 3 != 4"); // a breadcrumb (logErrors is off)
                 yield return null;
                 updateThrew = true; // Update throws once now: the exception Unity logs.
                 yield return null;
