@@ -14,7 +14,8 @@ First release, for Unity 6.0 LTS and 6.3 LTS (Mono and IL2CPP; every platform, W
 - Crashes on the next launch: iOS through the Zharp iOS SDK, which the build step adds to the Xcode
   project with a dSYM upload phase; Windows from Unity's crash folder, uploaded as a minidump; elsewhere
   a run that didn't quit as an `UncleanExit`.
-- Hangs: the main thread stuck for 5 s, from a watchdog thread straight to disk (not on WebGL).
+- Hangs: the main thread stuck for 5 s, from a watchdog thread straight to disk (not on WebGL), sent
+  once the game recovers or on the next launch; not when the freeze ended in a crash that was found.
 - `session.id`, `device.id`, the active scene as `screen.name` (and a `screen` span), `enduser.*`, tags.
 - `ZharpWebRequest.Send()`: UnityWebRequest traced with `traceparent`, headers with secrets filtered.
   `Zharp.LoadSceneAsync()` as a `scene.load` span; `Zharp.StartSpan()`.

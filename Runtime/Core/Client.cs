@@ -259,7 +259,14 @@ namespace ZharpCore
 
         // ─── Hangs and crashes ───────────────────────────────────────────────────
 
-        /// <summary>On the watchdog's thread: the main thread is stuck. Straight to disk.</summary>
+        string PendingHangPath => Path.Combine(storage, "hang.json");
+        readonly object hangGate = new object();
+
+        /// <summary>
+        /// On the watchdog's thread: the main thread is stuck. Straight to disk, as pending: sent when
+        /// the main thread recovers (<see cref="HangRecovered"/>), or on the next launch unless that
+        /// run crashed (<see cref="SettlePreviousHang"/>).
+        /// </summary>
         public void ReportHang(double seconds)
         {
             string s = screen;
@@ -272,7 +279,47 @@ namespace ZharpCore
             record["zharp.mechanism"] = "hang";
             record["zharp.error.kind"] = "anr";
             record["thread.name"] = "main";
-            Outbox.Write("logs", Json.Write(Otlp.LogsRequest(Resource, new List<object> { Otlp.LogRecord("error", "ApplicationNotResponding: " + message, record) })));
+            string body = Json.Write(Otlp.LogsRequest(Resource, new List<object> { Otlp.LogRecord("error", "ApplicationNotResponding: " + message, record) }));
+            lock (hangGate)
+            {
+                try
+                {
+                    Directory.CreateDirectory(storage);
+                    File.WriteAllText(PendingHangPath, body);
+                }
+                catch (Exception) { /* never into the game */ }
+            }
+        }
+
+        /// <summary>The main thread got through a frame again: the pending hang is sent.</summary>
+        public void HangRecovered() => ReleasePendingHang(true, "the main thread recovered: hang sent");
+
+        /// <summary>
+        /// On launch, before this run can hang: the previous run's pending hang (it ended while
+        /// frozen) is dropped when that run's crash was found, since the freeze was the crash on its
+        /// way down; otherwise (a clean quit, a kill, no crash report) it's sent.
+        /// </summary>
+        public void SettlePreviousHang(bool crashed) => ReleasePendingHang(!crashed, crashed ? "the previous run crashed while frozen: hang dropped" : "the previous run's hang sent");
+
+        public bool HasPendingHang
+        {
+            get { lock (hangGate) return File.Exists(PendingHangPath); }
+        }
+
+        void ReleasePendingHang(bool send, string what)
+        {
+            lock (hangGate)
+            {
+                try
+                {
+                    if (!File.Exists(PendingHangPath)) return;
+                    string body = File.ReadAllText(PendingHangPath);
+                    File.Delete(PendingHangPath);
+                    if (send) Outbox.Write("logs", body);
+                    DebugLog(what);
+                }
+                catch (Exception) { /* never into the game */ }
+            }
         }
 
         string MarkerPath => Path.Combine(storage, "run.json");

@@ -41,6 +41,8 @@ if [ "$OS" = windows ]; then
   # Unity's crash handler writes the crash folder; the next launch uploads its minidump.
   rm -rf "$TEMP/Zharp/Shop Quest/Crashes"
   scenario crash minidump crash after
+  rm -rf "$TEMP/Zharp/Shop Quest/Crashes"
+  scenario hang-crash minidump hang-crash after
 else
   scenario crash crash crash after
 fi

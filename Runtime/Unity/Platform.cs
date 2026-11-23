@@ -92,7 +92,8 @@ namespace ZharpUnity
     /// </summary>
     internal static class NativeCrashes
     {
-        public static void Check(Runtime runtime, RunMarker previous)
+        /// <summary>Whether the previous run's crash was found (its report is on its way).</summary>
+        public static bool Check(Runtime runtime, RunMarker previous)
         {
             Client client = runtime.Client;
             bool native = client.Settings.NativeCrashes;
@@ -106,13 +107,14 @@ namespace ZharpUnity
                 if (folder != null)
                 {
                     Upload(runtime, previous, folder);
-                    return;
+                    return true;
                 }
             }
-            if (previous == null || !previous.WorthReporting) return;
-            if (native && Platform.IsIosPlayer) return;
+            if (previous == null || !previous.WorthReporting) return false;
+            if (native && Platform.IsIosPlayer) return false;
             client.ReportUncleanExit(previous);
             runtime.Debug("the previous run didn't quit: sending it as an UncleanExit");
+            return false;
         }
 
         static void Upload(Runtime runtime, RunMarker previous, string folder)

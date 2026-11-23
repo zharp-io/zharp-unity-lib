@@ -143,6 +143,7 @@ elif scenario == "minidump":
         expect(d["fields"].get("screen.name") == "Level", "the crashed run's scene")
         expect("ForceCrash" in d["fields"].get("unity.player_log", ""), "the player log's end, with the crash's stack")
     expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
+    expect(not of_type("ApplicationNotResponding"), "no hang for the freeze while the crash handler wrote the dump")
 elif scenario == "upload":
     uploads = [e for e in entries if e["path"] == "/api/v1/applications/42/artifacts"]
     expect(len(uploads) == 1, "one source bundle upload: got %d" % len(uploads))

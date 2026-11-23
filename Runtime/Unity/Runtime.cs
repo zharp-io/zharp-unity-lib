@@ -117,7 +117,8 @@ namespace ZharpUnity
         {
             Settings s = Client.Settings;
             RunMarker previous = Platform.UsesRunMarker ? Client.TakePreviousRun() : null;
-            NativeCrashes.Check(this, previous);
+            bool crashed = NativeCrashes.Check(this, previous);
+            Client.SettlePreviousHang(crashed);
             if (Platform.UsesRunMarker) Client.WriteMarker();
 
             Application.logMessageReceivedThreaded += OnLog;
@@ -135,7 +136,7 @@ namespace ZharpUnity
             if (first.IsValid() && first.name.Length > 0) ScreenShown(first.name, "scene");
 
             if (s.DetectHangs && Platform.HasThreads)
-                watchdog = new Watchdog(s.HangThreshold, Client.ReportHang);
+                watchdog = new Watchdog(s.HangThreshold, Client.ReportHang, onRecovered: Client.HangRecovered);
 
             if (s.NativeCrashes) IosBridge.Start(s, Client.BuildId, Client.Session.Current());
             Debug("started: service \"" + s.Service + "\", sending to " + s.Endpoint);

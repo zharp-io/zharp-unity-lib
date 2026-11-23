@@ -79,8 +79,9 @@ That's all: Zharp starts before the first scene loads.
     an `UncleanExit` with that run's session, scene and player. Readable native stacks for these
     come later (see *Not yet*).
 - **Hangs:** the main thread not getting through a frame for 5 s (`hangThreshold`) is reported once
-  per freeze (`ApplicationNotResponding`), from a watchdog thread, straight to disk — so it's sent
-  even if the player kills the game. Not on WebGL (no threads), nor while the game is in the
+  per freeze (`ApplicationNotResponding`), from a watchdog thread, straight to disk. It's sent when
+  the game gets through a frame again, or on the next launch if the player killed it frozen; a freeze
+  that ended in a crash is reported as the crash only. Not on WebGL (no threads), nor while the game is in the
   background or a debugger is attached.
 - **Sessions, device, screens:** `session.id` (a new one after 30 minutes in the background, or on
   `ClearUser()`), a random `device.id` kept in `Application.persistentDataPath`, the active scene as

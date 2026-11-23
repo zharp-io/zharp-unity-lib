@@ -390,6 +390,23 @@ namespace CoreTests
         }
 
         [Fact]
+        public void SaysOnceWhenAFreezeIsOver()
+        {
+            long ms = 0;
+            var hangs = new List<double>();
+            int recovered = 0;
+            var w = new Watchdog(5, hangs.Add, () => ms, () => false, () => recovered++);
+            w.Beat();
+            ms = 2000; w.Beat();
+            Assert.Equal(0, recovered);
+            ms = 8000; w.Check();
+            ms = 9000; w.Beat();
+            ms = 9100; w.Beat();
+            Assert.Single(hangs);
+            Assert.Equal(1, recovered);
+        }
+
+        [Fact]
         public void RunsOnItsOwnThread()
         {
             var hang = new System.Threading.ManualResetEventSlim();
@@ -469,16 +486,55 @@ namespace CoreTests
         }
 
         [Fact]
-        public void WritesAHangStraightToDisk()
+        public void SendsAHangOnceWhenTheMainThreadRecovers()
         {
             using var dir = new TempDir();
             var c = NewClient(dir);
             c.ScreenShown("Level");
             c.ReportHang(5.24);
+            Assert.True(c.HasPendingHang);
+            Assert.Empty(c.Outbox.Files());
+            c.HangRecovered();
+            c.HangRecovered();
             var record = Read.Logs(c.Outbox.Read(c.Outbox.Files().Single())).Single();
             Assert.Equal("ApplicationNotResponding", record.A["exception.type"]);
             Assert.Equal("The main thread was blocked for 5.2 s on Level", record.A["exception.message"]);
             Assert.Equal("anr", record.A["zharp.error.kind"]);
+            Assert.False(c.HasPendingHang);
+            NewClient(dir).SettlePreviousHang(false);
+            Assert.Single(c.Outbox.Files());
+        }
+
+        [Fact]
+        public void DropsAHangThatEndedInACrash()
+        {
+            using var dir = new TempDir();
+            var first = NewClient(dir);
+            first.WriteMarker();
+            first.ReportHang(6.0);
+            // The process dies frozen: no recovery, no clean quit. The next launch finds its crash.
+            var second = NewClient(dir);
+            Assert.NotNull(second.TakePreviousRun());
+            second.SettlePreviousHang(crashed: true);
+            Assert.Empty(second.Outbox.Files());
+            Assert.False(second.HasPendingHang);
+        }
+
+        [Fact]
+        public void SendsAHangThatNeverRecoveredOnTheNextLaunchWhenThatRunDidntCrash()
+        {
+            using var dir = new TempDir();
+            var first = NewClient(dir);
+            first.ScreenShown("Level");
+            first.WriteMarker();
+            first.ReportHang(5.5);
+            first.ClearMarker(); // quit cleanly, still frozen
+            var second = NewClient(dir);
+            Assert.Null(second.TakePreviousRun());
+            second.SettlePreviousHang(crashed: false);
+            var record = Read.Logs(second.Outbox.Read(second.Outbox.Files().Single())).Single();
+            Assert.Equal("The main thread was blocked for 5.5 s on Level", record.A["exception.message"]);
+            Assert.Equal(first.Session.Id, record.A["session.id"]);
         }
 
         [Fact]

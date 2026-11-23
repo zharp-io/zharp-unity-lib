@@ -54,6 +54,15 @@ public class Scenario : MonoBehaviour
                 Debug.Log("[e2e] crashing");
                 Utils.ForceCrash(ForcedCrashCategory.AccessViolation);
                 break;
+            case "hang-crash":
+                // Frozen past the hang threshold, then a crash with no frame in between: the
+                // hang the watchdog saw is the crash's, so only the crash is reported.
+                yield return null;
+                yield return null;
+                Thread.Sleep(6500);
+                Debug.Log("[e2e] crashing while frozen");
+                Utils.ForceCrash(ForcedCrashCategory.AccessViolation);
+                break;
             case "managed-crash":
                 // An exception on a thread of its own: AppDomain.UnhandledException.
                 new Thread(() => throw new InvalidOperationException("Sync thread died")).Start();
