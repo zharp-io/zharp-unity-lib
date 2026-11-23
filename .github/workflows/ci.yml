@@ -73,6 +73,8 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: StandaloneLinux64
           buildMethod: E2EBuild.Build
+          # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
+          versioning: None
           buildsPath: build
           # The Editor runs in a container: the host is the Docker bridge's gateway.
           customParameters: -zharpToken e2e-token -zharpUrl http://172.17.0.1:4318
@@ -112,6 +114,8 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: WebGL
           buildMethod: E2EBuild.Build
+          # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
+          versioning: None
           buildsPath: build
       - name: The WebGL build in headless Chrome
         run: |
@@ -150,6 +154,8 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: StandaloneWindows64
           buildMethod: E2EBuild.Build
+          # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
+          versioning: None
           buildsPath: build
       - name: Player scenarios (the crash as Unity's crash-folder minidump)
         shell: bash
@@ -180,6 +186,8 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: iOS
           buildMethod: E2EBuild.Build
+          # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
+          versioning: None
           buildsPath: build
       - run: sudo chown -R "$USER" build && tar czf ios-project.tgz build
       - uses: actions/upload-artifact@v4
@@ -248,6 +256,8 @@ jobs:
           unityVersion: ${{ matrix.unity }}
           targetPlatform: Android
           buildMethod: E2EBuild.Build
+          # The version is unused; Semantic refuses a tree the stand-in receiver has written into.
+          versioning: None
           buildsPath: build
       - name: KVM for the emulator
         run: |
