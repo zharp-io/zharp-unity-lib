@@ -226,13 +226,16 @@ jobs:
         run: |
           APP=$(find dd -name '*.app' -path '*iphonesimulator*' | head -1)
           DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if 'iPhone' in x['name']))")
-          xcrun simctl boot "$DEVICE"; xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl boot "$DEVICE"; xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          # The game's own log, whatever happens (a slow or crashing start shows here).
+          xcrun simctl spawn "$DEVICE" log stream --style compact --predicate 'process CONTAINS "Shop" OR process CONTAINS "ProductName"' > out-sim.log 2>&1 &
           run() { # out dir, modes…
             local out=$1; shift; mkdir -p "$out"
             python3 "E2E~/receiver.py" "$out" 4318 > "$out/receiver.log" 2>&1 & local r=$!; sleep 1
             for m in "$@"; do
               SIMCTL_CHILD_ZHARP_E2E_MODE=$m xcrun simctl launch --terminate-running-process "$DEVICE" io.zharp.e2e.shopquest
-              for i in $(seq 1 60); do grep -q "^$m$" "$out/done.txt" 2>/dev/null && break; [ "$m" = crash ] && [ $i -gt 8 ] && break; sleep 2; done
+              for i in $(seq 1 120); do grep -q "^$m$" "$out/done.txt" 2>/dev/null && break; [ "$m" = crash ] && [ $i -gt 8 ] && break; sleep 2; done
               xcrun simctl terminate "$DEVICE" io.zharp.e2e.shopquest || true
             done
             kill $r; touch "$out/received.jsonl" "$out/requests.jsonl"
@@ -241,6 +244,11 @@ jobs:
           python3 "E2E~/check.py" error out/ios-error/received.jsonl out/ios-error/requests.jsonl
           run out/ios-crash crash after
           python3 "E2E~/check.py" ios-crash out/ios-crash/received.jsonl
+      - name: The simulator's log of the game
+        if: always()
+        run: |
+          mkdir -p out && cp out-sim.log out/ios-sim.log 2>/dev/null || true
+          grep -E "Zharp|e2e|Exception|Error" out/ios-sim.log | tail -60 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

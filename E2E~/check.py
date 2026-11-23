@@ -76,10 +76,11 @@ if scenario in ("error", "web"):
         # A native IL2CPP player (not WebGL) builds the stack of a NullReferenceException raised by a
         # null check from the native stack, and Unity logs it wrong: in run 45243909011 Android and
         # iOS logged "Shop.Checkout.Charge (at Checkout.cs:47)", a method that had returned, in
-        # Unity's own log too. Zharp sends what Unity logs, so only the class and file are checked.
+        # Unity's own log too. Zharp sends what Unity logs, so only the class is checked. (A Linux
+        # IL2CPP player built by GameCI has no file and line at all: "(at <000…>:0)".)
         il2cpp_native = e["resource"].get("unity.scripting_backend") == "il2cpp" and e["resource"].get("unity.platform") != "WebGLPlayer"
         if il2cpp_native:
-            expect(any("Shop.Checkout." in line and "Checkout.cs:" in line for line in stack[1:2]), "the top frame is in Checkout.cs: %s" % stack[:3])
+            expect(any("Shop.Checkout." in line for line in stack[1:2]), "the top frame is in Shop.Checkout: %s" % stack[:3])
             if not any("Shop.Checkout.AddToCart" in line for line in stack[1:2]):
                 print("note: IL2CPP put the NullReferenceException at %s" % stack[1:2])
         top = ("Shop.Checkout.AddToCart", "Shop.Checkout.Open") if mono else ("Shop.Checkout.AddToCart",)

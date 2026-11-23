@@ -36,6 +36,8 @@ scenario() { # name, check, modes…
   local i=0
   for mode in "$@"; do i=$((i+1)); launch "$mode" "$name-$i"; done
   kill $rpid 2>/dev/null; wait $rpid 2>/dev/null
+  # What Unity's crash handler left (Windows), for a look when a minidump check fails.
+  [ "$OS" = windows ] && ls -laR "$TEMP/Zharp/Shop Quest/Crashes" > "$OUT/$name/crash-folder.txt" 2>&1
   touch "$OUT/$name/received.jsonl" "$OUT/$name/requests.jsonl"
   python3 "$HERE/check.py" "$check" "$OUT/$name/received.jsonl" "$OUT/$name/requests.jsonl" "$GUID" || FAILED=1
 }

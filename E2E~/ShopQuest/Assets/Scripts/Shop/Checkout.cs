@@ -41,7 +41,7 @@ namespace Shop
             }
         }
 
-        static void Charge(int coins)
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void Charge(int coins)
         {
             if (coins <= 0) throw new System.ArgumentOutOfRangeException(nameof(coins), "Nothing to pay");
         }
