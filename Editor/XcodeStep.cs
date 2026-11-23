@@ -66,8 +66,7 @@ namespace ZharpEditor
 
         /// <summary>The iOS SDK's own dSYM upload (curl, no Node needed), each UUID once.</summary>
         static string UploadScript(string apiUrl, string appId) =>
-$@"# Zharp: this build's dSYMs, for readable native crashes. Needs ZHARP_AUTH_TOKEN (an API key with
-# artifacts:write) in the environment; set it in CI, never in the project.
+$@"# Zharp: this build's dSYMs, for readable native crashes. Needs ZHARP_AUTH_TOKEN (an API key with artifacts:write) in the environment; set it in CI, never in the project.
 APP_ID=""${{ZHARP_APP_ID:-{appId}}}""
 if [ -z ""$ZHARP_AUTH_TOKEN"" ] || [ -z ""$APP_ID"" ]; then
   echo ""Zharp: no ZHARP_AUTH_TOKEN or application ID: dSYMs not uploaded""; exit 0

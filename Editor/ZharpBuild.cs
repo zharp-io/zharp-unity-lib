@@ -38,8 +38,8 @@ namespace ZharpEditor
             {
                 NamedBuildTarget target = NamedBuildTarget.FromBuildTargetGroup(report.summary.platformGroup);
                 if (PlayerSettings.GetScriptingBackend(target) != ScriptingImplementation.IL2CPP) return;
-                if (PlayerSettings.GetIl2CppStacktraceInformation(target) == Il2CppStacktraceInformation.MethodFileLineMapping) return;
-                PlayerSettings.SetIl2CppStacktraceInformation(target, Il2CppStacktraceInformation.MethodFileLineMapping);
+                if (PlayerSettings.GetIl2CppStacktraceInformation(target) == Il2CppStacktraceInformation.MethodFileLineNumber) return;
+                PlayerSettings.SetIl2CppStacktraceInformation(target, Il2CppStacktraceInformation.MethodFileLineNumber);
                 Debug.Log("[Zharp] IL2CPP Stacktrace Information set to Method Name, File Name, and Line Number, so release stacks keep their lines (turn il2cppLineNumbers off in Project Settings › Zharp to leave it).");
             }
             catch (Exception e)
@@ -62,10 +62,13 @@ namespace ZharpEditor
             if (s.UploadSources) UploadSources(s, buildId);
         }
 
-        // Packages' link.xml isn't read on its own: handed to the linker here.
+        // Packages' link.xml isn't read on its own: handed to the linker here. The package's resolved
+        // path, since a file: or git dependency doesn't live under the project's Packages folder.
         public string GenerateAdditionalLinkXmlFile(BuildReport report, UnityLinkerBuildPipelineData data)
         {
-            string path = Path.GetFullPath("Packages/io.zharp.unity/Runtime/link.xml");
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ZharpBuild).Assembly);
+            string root = package != null ? package.resolvedPath : Path.GetFullPath("Packages/io.zharp.unity");
+            string path = Path.Combine(root, "Runtime", "link.xml");
             return File.Exists(path) ? path : null;
         }
 
@@ -92,7 +95,7 @@ namespace ZharpEditor
         {
             byte[] json = Encoding.UTF8.GetBytes(Json.Write(new Dictionary<string, object> { ["files"] = files.ToDictionary(p => p.Key, p => (object)p.Value) }));
             using var output = new MemoryStream();
-            using (var gzip = new GZipStream(output, CompressionLevel.Optimal, true)) gzip.Write(json, 0, json.Length);
+            using (var gzip = new GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, true)) gzip.Write(json, 0, json.Length);
             return output.ToArray();
         }
 
@@ -124,19 +127,24 @@ namespace ZharpEditor
             }
         }
 
+        // Mono writes form-data names unquoted (name=kind), which not every server reads; quoted, as
+        // RFC 7578 has them. .NET leaves a name that's already quoted alone.
+        static string Quoted(string value) => "\"" + value + "\"";
+
         internal static void Upload(string apiUrl, string appId, string token, string kind, string debugId, string release, string name, byte[] gzipped)
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-            using var form = new MultipartFormDataContent
+            // Not disposed here: the request owns it, and Mono's MultipartContent throws when disposed twice.
+            var form = new MultipartFormDataContent
             {
-                { new StringContent(kind), "kind" },
-                { new StringContent(debugId), "debugId" },
-                { new StringContent(name), "name" },
+                { new StringContent(kind), Quoted("kind") },
+                { new StringContent(debugId), Quoted("debugId") },
+                { new StringContent(name), Quoted("name") },
             };
-            if (!string.IsNullOrWhiteSpace(release)) form.Add(new StringContent(release), "release");
+            if (!string.IsNullOrWhiteSpace(release)) form.Add(new StringContent(release), Quoted("release"));
             var file = new ByteArrayContent(gzipped);
             file.Headers.ContentType = new MediaTypeHeaderValue("application/gzip");
-            form.Add(file, "file", name + ".gz");
+            form.Add(file, Quoted("file"), Quoted(name + ".gz"));
             string target = apiUrl.TrimEnd('/') + "/api/v1/applications/" + Uri.EscapeDataString(appId.Trim()) + "/artifacts";
             using var request = new HttpRequestMessage(HttpMethod.Post, target) { Content = form };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

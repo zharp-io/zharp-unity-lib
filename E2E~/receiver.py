@@ -33,8 +33,9 @@ def multipart(body, content_type):
             continue
         head, data = part.split(b"\r\n\r\n", 1)
         disposition = head.decode("utf-8", "replace")
-        name = re.search(r'name="([^"]*)"', disposition).group(1)
-        if 'filename="' in disposition:
+        # Quoted as RFC 7578 has it, or bare as Mono's HttpClient writes it.
+        name = re.search(r'\bname="?([^";\r\n]*)"?', disposition).group(1)
+        if 'filename=' in disposition:
             files[name] = data
         else:
             fields[name] = data.decode("utf-8", "replace")
