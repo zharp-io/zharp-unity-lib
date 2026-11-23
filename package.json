@@ -1,0 +1,22 @@
+{
+  "name": "io.zharp.unity",
+  "version": "0.1.0",
+  "displayName": "Zharp",
+  "description": "C# exceptions with their stacks and the code that ran, crashes (iOS, Windows), hangs, sessions, scenes, traced UnityWebRequests and optional logs from Unity games, sent to Zharp. Mono and IL2CPP, every platform including WebGL.",
+  "unity": "6000.0",
+  "documentationUrl": "https://zharp.io/docs/sdks/unity",
+  "changelogUrl": "https://github.com/zharp-io/zharp-unity-lib/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/zharp-io/zharp-unity-lib/blob/main/LICENSE",
+  "license": "MIT",
+  "keywords": ["zharp", "crash", "crash-reporting", "error-tracking", "exceptions", "monitoring", "apm", "il2cpp", "webgl"],
+  "author": { "name": "Zharp", "url": "https://zharp.io" },
+  "repository": { "type": "git", "url": "https://github.com/zharp-io/zharp-unity-lib.git" },
+  "dependencies": {},
+  "samples": [
+    {
+      "displayName": "Shop Quest",
+      "description": "A script that reports a handled error, a traced request, a span, the player and a scene load.",
+      "path": "Samples~/ShopQuest"
+    }
+  ]
+}

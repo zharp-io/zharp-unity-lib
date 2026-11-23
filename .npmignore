@@ -1,0 +1,4 @@
+# OpenUPM publishes the repository as the package: tests outside Unity and CI stay out.
+CoreTests~/
+E2E~/
+.github/

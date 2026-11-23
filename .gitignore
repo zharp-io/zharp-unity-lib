@@ -1,0 +1,12 @@
+CoreTests~/bin/
+CoreTests~/obj/
+E2E~/ShopQuest/Library/
+E2E~/ShopQuest/Temp/
+E2E~/ShopQuest/Logs/
+E2E~/ShopQuest/UserSettings/
+E2E~/ShopQuest/Builds/
+E2E~/ShopQuest/Packages/packages-lock.json
+E2E~/ShopQuest/Assets/Zharp/
+E2E~/ShopQuest/Assets/Scenes/
+E2E~/out/
+.DS_Store
