@@ -1,0 +1,4 @@
+<!-- Zharp uses no reflection; this keeps the runtime whole under High managed stripping all the same. -->
+<linker>
+  <assembly fullname="Zharp.Unity" preserve="all" />
+</linker>
