@@ -326,7 +326,7 @@ namespace ZharpUnity
     [AddComponentMenu("")]
     internal sealed class Host : MonoBehaviour
     {
-        public Runtime Runtime;
+        [NonSerialized] public Runtime Runtime;
 
         void Update() => Runtime?.Update();
         void OnApplicationPause(bool paused) => Runtime?.Paused(paused);

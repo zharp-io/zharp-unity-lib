@@ -171,6 +171,15 @@ namespace CoreTests
             Assert.Equal("Shop.SaveGame:Write", mine[0].Function);
             Assert.True(Stacks.IsFromZharp(Stacks.Parse("ZharpUnity.Transport:Pump () (at ./Library/PackageCache/io.zharp.unity@0.1.0/Runtime/Unity/Transport.cs:40)")));
             Assert.False(Stacks.IsFromZharp(frames));
+
+            // A player's StackTraceUtility.ExtractStackTrace() keeps Unity's own frames on top.
+            var player = Stacks.Parse("UnityEngine.Debug:ExtractStackTraceNoAlloc (byte*,int,string)\n" +
+                "UnityEngine.StackTraceUtility:ExtractStackTrace ()\n" +
+                "Zharp:CaptureError (string,System.Collections.Generic.IDictionary`2<string, object>,string)\n" +
+                "Shop.Checkout:Save (int)\n" +
+                "UnityEngine.SetupCoroutine:InvokeMoveNext (System.Collections.IEnumerator,intptr)");
+            Assert.Equal("Shop.Checkout:Save", Stacks.WithoutOwnFrames(player)[0].Function);
+            Assert.False(Stacks.IsFromZharp(player));
         }
 
         [Fact]

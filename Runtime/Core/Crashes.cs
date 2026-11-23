@@ -124,9 +124,31 @@ namespace ZharpCore
                 Put(key, Res(key));
             string error = Tail(Path.Combine(folder ?? "", "error.log"), 4000);
             if (error.Length > 0) a["unity.error_log"] = error;
-            string log = Tail(Path.Combine(folder ?? "", "Player.log"), 8000);
+            string log = Tail(PlayerLog(folder), 8000);
             if (log.Length > 0) a["unity.player_log"] = log;
             return a;
+        }
+
+        /// <summary>
+        /// The player's log in a crash folder: Player.log, or under the name -logFile gave it (Unity 6.x
+        /// copies it as it was named, and may write no error.log). Its end holds the crash's stack.
+        /// </summary>
+        static string PlayerLog(string folder)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return "";
+                string player = Path.Combine(folder, "Player.log");
+                if (File.Exists(player)) return player;
+                return Directory.GetFiles(folder, "*.log")
+                    .Where(f => !string.Equals(Path.GetFileName(f), "error.log", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => new FileInfo(f).Length)
+                    .FirstOrDefault() ?? "";
+            }
+            catch (Exception)
+            {
+                return "";
+            }
         }
 
         public static byte[] ReadDump(string folder)

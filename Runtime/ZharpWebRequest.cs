@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine.LowLevel;
 using UnityEngine.Networking;
+using UnityEngine.PlayerLoop;
 using ZharpCore;
 using ZharpUnity;
 
@@ -58,12 +60,65 @@ public static class ZharpWebRequest
         }
 
         UnityWebRequestAsyncOperation op = request.SendWebRequest();
-        if (span != null) op.completed += _ => Finish(request, span);
+        if (span != null)
+        {
+            Watch(request, span);
+            op.completed += _ => Finish(request, span);
+        }
         return op;
+    }
+
+    // Unity resumes a coroutine waiting on a request (in EarlyUpdate.ExecuteMainThreadJobs) before it
+    // calls `completed`, so with `using var request` the request is already disposed there. The
+    // request turns isDone on a worker thread earlier, so a step of Zharp's own, just before that
+    // one in the player loop, reads each request that's done while the game still holds it.
+    static readonly List<KeyValuePair<UnityWebRequest, ZharpSpan>> inFlight = new List<KeyValuePair<UnityWebRequest, ZharpSpan>>();
+
+    struct ZharpWebRequestPoll { }
+
+    static void Watch(UnityWebRequest request, ZharpSpan span)
+    {
+        inFlight.Add(new KeyValuePair<UnityWebRequest, ZharpSpan>(request, span));
+        try
+        {
+            PlayerLoopSystem loop = PlayerLoop.GetCurrentPlayerLoop();
+            if (loop.subSystemList == null) return;
+            for (int p = 0; p < loop.subSystemList.Length; p++)
+            {
+                PlayerLoopSystem phase = loop.subSystemList[p];
+                if (phase.type != typeof(EarlyUpdate) || phase.subSystemList == null) continue;
+                var systems = new List<PlayerLoopSystem>(phase.subSystemList);
+                if (systems.Exists(s => s.type == typeof(ZharpWebRequestPoll))) return;
+                int at = systems.FindIndex(s => s.type == typeof(EarlyUpdate.ExecuteMainThreadJobs));
+                systems.Insert(at < 0 ? 0 : at, new PlayerLoopSystem { type = typeof(ZharpWebRequestPoll), updateDelegate = Poll });
+                phase.subSystemList = systems.ToArray();
+                loop.subSystemList[p] = phase;
+                PlayerLoop.SetPlayerLoop(loop);
+                return;
+            }
+        }
+        catch (Exception e)
+        {
+            Runtime.Current?.Debug("ZharpWebRequest: player loop: " + e.Message);
+        }
+    }
+
+    static void Poll()
+    {
+        for (int i = inFlight.Count - 1; i >= 0 && i < inFlight.Count; i--)
+        {
+            var pair = inFlight[i];
+            bool done;
+            try { done = pair.Key.isDone; }
+            catch (Exception) { done = true; }
+            if (done) Finish(pair.Key, pair.Value);
+        }
     }
 
     static void Finish(UnityWebRequest request, ZharpSpan span)
     {
+        inFlight.RemoveAll(p => p.Value == span);
+        if (span.Ended) return;
         try
         {
             if (request.result == UnityWebRequest.Result.ConnectionError || request.result == UnityWebRequest.Result.DataProcessingError)
@@ -85,9 +140,10 @@ public static class ZharpWebRequest
                 }
             }
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // A request disposed before it completed: nothing more to read.
+            Runtime.Current?.Debug("ZharpWebRequest finish: " + e.GetType().Name + ": " + e.Message);
         }
         span.End();
     }

@@ -121,12 +121,23 @@ namespace ZharpCore
             return word.EndsWith("Exception", StringComparison.Ordinal) || (word.EndsWith("Error", StringComparison.Ordinal) && word != "Error");
         }
 
-        /// <summary>A stack without Zharp's own frames on top (where a handled error was reported from).</summary>
+        /// <summary>
+        /// A stack without Zharp's own frames on top (where a handled error was reported from), nor
+        /// the frames of Unity taking the stack, which a player's StackTraceUtility.ExtractStackTrace() keeps.
+        /// </summary>
         public static List<Frame> WithoutOwnFrames(List<Frame> frames)
         {
             int skip = 0;
-            while (skip < frames.Count && IsOwn(frames[skip])) skip++;
+            while (skip < frames.Count && (IsOwn(frames[skip]) || IsStackCapture(frames[skip]))) skip++;
             return skip == 0 ? frames : frames.GetRange(skip, frames.Count - skip);
+        }
+
+        static bool IsStackCapture(Frame frame)
+        {
+            string f = frame.Function ?? "";
+            return f.StartsWith("UnityEngine.StackTraceUtility", StringComparison.Ordinal)
+                || f.StartsWith("UnityEngine.Debug:ExtractStackTrace", StringComparison.Ordinal)
+                || f.StartsWith("UnityEngine.Debug.ExtractStackTrace", StringComparison.Ordinal);
         }
 
         public static bool IsOwn(Frame frame)
