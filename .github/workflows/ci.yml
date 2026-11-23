@@ -1,0 +1,267 @@
+# Zharp for Unity: the core outside Unity, then GameCI (Unity in Docker, with the Unity Personal
+# licence in the secrets UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD) for edit-mode tests and players
+# on Unity 6.0 LTS and 6.3 LTS, each checked against a stand-in Zharp (E2E~/receiver.py):
+#   Linux IL2CPP player: errors, logs on/off, a hang, a thread's exception, a crash, offline;
+#     and the build step's source bundle upload under the build GUID;
+#   WebGL in headless Chrome; a Windows IL2CPP player's crash folder sent as a minidump;
+#   iOS in the simulator on macOS (the iOS SDK's crash report); Android on an emulator with KVM.
+# The Unity versions must exist as GameCI images: https://game.ci/docs/docker/versions
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PROJECT: E2E~/ShopQuest
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test "CoreTests~" --nologo
+
+  editmode:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          testMode: editmode
+          artifactsPath: test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: editmode-${{ matrix.unity }}
+          path: test-results
+
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stand-in Zharp for the build step's upload
+        run: |
+          mkdir -p out/upload
+          python3 "E2E~/receiver.py" out/upload 4318 > out/upload/receiver.log 2>&1 &
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: E2EBuild.Build
+          buildsPath: build
+          # The Editor runs in a container: the host is the Docker bridge's gateway.
+          customParameters: -zharpToken e2e-token -zharpUrl http://172.17.0.1:4318
+      - name: The source bundle, uploaded under the build GUID
+        run: |
+          sudo chown -R "$USER" build
+          GUID_FILE=$(find build -name build-guid.txt | head -1)
+          touch out/upload/received.jsonl
+          python3 "E2E~/check.py" upload out/upload/received.jsonl "" "$GUID_FILE"
+      - name: Player scenarios
+        run: |
+          pkill -f receiver.py || true
+          PLAYER=$(find build -type f -name 'ShopQuest*' ! -name '*.so' ! -name '*.txt' | head -1)
+          chmod +x "$PLAYER"
+          bash "E2E~/run-player.sh" "$PLAYER" linux "$PWD/out/linux"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-${{ matrix.unity }}
+          path: out
+
+  webgl:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: WebGL
+          buildMethod: E2EBuild.Build
+          buildsPath: build
+      - name: The WebGL build in headless Chrome
+        run: |
+          sudo chown -R "$USER" build
+          SITE=$(dirname "$(find build -name index.html | head -1)")
+          mkdir -p out/web
+          python3 "E2E~/receiver.py" out/web 4318 "$SITE" > out/web/receiver.log 2>&1 &
+          sleep 1
+          google-chrome --headless=new --no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader \
+            --enable-logging=stderr --v=0 "http://127.0.0.1:4318/index.html?mode=error" > out/web/chrome.log 2>&1 &
+          for i in $(seq 1 120); do grep -q error out/web/done.txt 2>/dev/null && break; sleep 2; done
+          sleep 2
+          touch out/web/received.jsonl out/web/requests.jsonl
+          python3 "E2E~/check.py" web out/web/received.jsonl out/web/requests.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: webgl-${{ matrix.unity }}
+          path: out
+
+  windows:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: StandaloneWindows64
+          buildMethod: E2EBuild.Build
+          buildsPath: build
+      - name: Player scenarios (the crash as Unity's crash-folder minidump)
+        shell: bash
+        run: |
+          PLAYER=$(find build -name 'ShopQuest.exe' | head -1)
+          bash "E2E~/run-player.sh" "$PLAYER" windows "$PWD/out/windows"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-${{ matrix.unity }}
+          path: out
+
+  ios-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: iOS
+          buildMethod: E2EBuild.Build
+          buildsPath: build
+      - run: sudo chown -R "$USER" build && tar czf ios-project.tgz build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-project-${{ matrix.unity }}
+          path: ios-project.tgz
+
+  ios:
+    needs: ios-build
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-project-${{ matrix.unity }}
+      - name: Build for the simulator (the Zharp iOS SDK comes in as a Swift package)
+        run: |
+          tar xzf ios-project.tgz
+          PROJ=$(dirname "$(find build -name project.pbxproj -path '*Unity-iPhone.xcodeproj*' | head -1)")
+          xcodebuild -project "$PROJ" -scheme Unity-iPhone -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build | tail -30
+      - name: Error, then a crash sent by the iOS SDK on the next launch
+        run: |
+          APP=$(find dd -name '*.app' -path '*iphonesimulator*' | head -1)
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if 'iPhone' in x['name']))")
+          xcrun simctl boot "$DEVICE"; xcrun simctl install "$DEVICE" "$APP"
+          run() { # out dir, modes…
+            local out=$1; shift; mkdir -p "$out"
+            python3 "E2E~/receiver.py" "$out" 4318 > "$out/receiver.log" 2>&1 & local r=$!; sleep 1
+            for m in "$@"; do
+              SIMCTL_CHILD_ZHARP_E2E_MODE=$m xcrun simctl launch --terminate-running-process "$DEVICE" io.zharp.e2e.shopquest
+              for i in $(seq 1 60); do grep -q "^$m$" "$out/done.txt" 2>/dev/null && break; [ "$m" = crash ] && [ $i -gt 8 ] && break; sleep 2; done
+              xcrun simctl terminate "$DEVICE" io.zharp.e2e.shopquest || true
+            done
+            kill $r; touch "$out/received.jsonl" "$out/requests.jsonl"
+          }
+          run out/ios-error error
+          python3 "E2E~/check.py" error out/ios-error/received.jsonl out/ios-error/requests.jsonl
+          run out/ios-crash crash after
+          python3 "E2E~/check.py" ios-crash out/ios-crash/received.jsonl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-${{ matrix.unity }}
+          path: out
+
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        unity: [6000.0.47f1, 6000.3.0f1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ env.PROJECT }}
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: Android
+          buildMethod: E2EBuild.Build
+          buildsPath: build
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo chown -R "$USER" build
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          script: bash "E2E~/run-android.sh" "$(find build -name '*.apk' | head -1)" "$PWD/out/android"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-${{ matrix.unity }}
+          path: out
