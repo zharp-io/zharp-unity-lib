@@ -12,23 +12,25 @@ guid_path = sys.argv[4] if len(sys.argv) > 4 else ""
 
 
 def values(attributes):
-    return {a["key"]: list(a["value"].values())[0] for a in attributes}
+    return {a["key"]: (list(a.get("value", {}).values()) or [""])[0] for a in attributes}
 
 
 entries = [json.loads(line) for line in open(received_path)] if os.path.exists(received_path) else []
 logs, spans = [], []
 for entry in entries:
     body = entry.get("body") or {}
+    # OTLP/JSON as the C# side writes it, or protobuf turned into JSON (the iOS SDK), which leaves
+    # out empty fields.
     for rl in body.get("resourceLogs", []):
-        resource = values(rl["resource"]["attributes"])
-        for scope in rl["scopeLogs"]:
-            for r in scope["logRecords"]:
-                logs.append({"resource": resource, "severity": r["severityText"], "body": r["body"]["stringValue"], "a": values(r["attributes"])})
+        resource = values(rl.get("resource", {}).get("attributes", []))
+        for scope in rl.get("scopeLogs", []):
+            for r in scope.get("logRecords", []):
+                logs.append({"resource": resource, "severity": r.get("severityText", ""), "body": (r.get("body") or {}).get("stringValue", ""), "a": values(r.get("attributes", []))})
     for rs in body.get("resourceSpans", []):
-        resource = values(rs["resource"]["attributes"])
-        for scope in rs["scopeSpans"]:
-            for s in scope["spans"]:
-                spans.append({"resource": resource, "name": s["name"], "kind": s["kind"], "trace": s["traceId"], "id": s["spanId"], "a": values(s["attributes"])})
+        resource = values(rs.get("resource", {}).get("attributes", []))
+        for scope in rs.get("scopeSpans", []):
+            for s in scope.get("spans", []):
+                spans.append({"resource": resource, "name": s.get("name", ""), "kind": s.get("kind"), "trace": s.get("traceId", ""), "id": s.get("spanId", ""), "a": values(s.get("attributes", []))})
 requests = [json.loads(line) for line in open(requests_path)] if requests_path and os.path.exists(requests_path) else []
 guid = open(guid_path).read().strip() if guid_path and os.path.exists(guid_path) else ""
 errors = [l for l in logs if "exception.type" in l["a"]]
@@ -144,7 +146,20 @@ elif scenario == "managed-crash":
     expect(len(died) >= 1, "the thread's exception")
 elif scenario == "minidump":
     dumps = [e for e in entries if e["path"].endswith("/minidump")]
-    expect(len(dumps) == 1, "one minidump upload: got %d" % len(dumps))
+    # Unity's crash handler sometimes leaves a crash folder without crash.dmp (seen on CI runners):
+    # the crash is then an UncleanExit that says so, with the player log (see crash-folder.txt).
+    listing = os.path.join(os.path.dirname(received_path), "crash-folder.txt")
+    no_dump = not dumps and os.path.exists(listing) and "crash.dmp" not in open(listing).read()
+    if no_dump:
+        print("note: Unity's crash handler wrote no crash.dmp")
+        unclean = of_type("UncleanExit")
+        expect(len(unclean) == 1, "the crash as one UncleanExit when there's no dump: got %d" % len(unclean))
+        for e in unclean:
+            expect("no minidump" in e["a"]["exception.message"], "the UncleanExit says there was no dump: %s" % e["a"]["exception.message"])
+            expect("END OF STACKTRACE" in e["a"].get("unity.player_log", ""), "with the player log's end")
+    else:
+        expect(len(dumps) == 1, "one minidump upload: got %d" % len(dumps))
+        expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
     for d in dumps:
         expect(d["mdmp"], "a minidump (MDMP)")
         expect(d["query"].get("key") == ["zpk_e2e_test"], "the key in the URL")
@@ -158,7 +173,6 @@ elif scenario == "minidump":
             expect("END OF STACKTRACE" in d["fields"]["unity.player_log"], "the player log's end, with the crash's stack")
         else:
             print("note: no player log in the crash folder")
-    expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
     expect(not of_type("ApplicationNotResponding"), "no hang for the freeze while the crash handler wrote the dump")
 elif scenario == "upload":
     uploads = [e for e in entries if e["path"] == "/api/v1/applications/42/artifacts"]

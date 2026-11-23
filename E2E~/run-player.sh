@@ -50,9 +50,10 @@ scenario managed managed-crash managed-crash after
 if [ "$OS" = windows ]; then
   # Unity's crash handler writes the crash folder; the next launch uploads its minidump.
   rm -rf "$TEMP/Zharp/Shop Quest/Crashes"
-  scenario crash minidump crash after
+  # A third launch sends what the second left when the crash had no dump (an UncleanExit at its quit).
+  scenario crash minidump crash after after
   rm -rf "$TEMP/Zharp/Shop Quest/Crashes"
-  scenario hang-crash minidump hang-crash after
+  scenario hang-crash minidump hang-crash after after
 else
   scenario crash crash crash after
 fi

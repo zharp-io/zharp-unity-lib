@@ -375,9 +375,10 @@ namespace ZharpCore
         /// A previous run that didn't quit, with no crash report of its own to send (no minidump, no
         /// iOS crash): an <c>UncleanExit</c> with that run's session, scene and player.
         /// </summary>
-        public void ReportUncleanExit(RunMarker marker, string detail = "")
+        public void ReportUncleanExit(RunMarker marker, string detail = "", IDictionary<string, object> attributes = null)
         {
             var record = new Dictionary<string, object>(marker.Context);
+            if (attributes != null) foreach (var pair in attributes) record[pair.Key] = pair.Value;
             string message = "The game stopped without quitting" + (marker.Context.TryGetValue("screen.name", out object s) && s != null ? " on " + s : "") + (detail.Length > 0 ? ": " + detail : "");
             record["exception.type"] = "UncleanExit";
             record["exception.message"] = message;

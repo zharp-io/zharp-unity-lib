@@ -72,14 +72,14 @@ namespace ZharpCore
         public static string RootFor(string tempDir, string company, string product) => Path.Combine(tempDir, company ?? "", product ?? "", "Crashes");
 
         /// <summary>The newest crash folder with a dump, written since <paramref name="since"/> (UTC), not sent yet.</summary>
-        public static string Newest(string root, DateTime since)
+        public static string Newest(string root, DateTime since, bool withDump = true)
         {
             try
             {
                 if (!Directory.Exists(root)) return null;
                 return Directory.GetDirectories(root)
-                    .Where(d => File.Exists(Path.Combine(d, "crash.dmp")) && !File.Exists(Path.Combine(d, SentMarker)))
-                    .Select(d => new { Dir = d, At = File.GetLastWriteTimeUtc(Path.Combine(d, "crash.dmp")) })
+                    .Where(d => (!withDump || File.Exists(Path.Combine(d, "crash.dmp"))) && !File.Exists(Path.Combine(d, SentMarker)))
+                    .Select(d => new { Dir = d, At = withDump ? File.GetLastWriteTimeUtc(Path.Combine(d, "crash.dmp")) : Directory.GetLastWriteTimeUtc(d) })
                     .Where(x => x.At >= since.AddSeconds(-5))
                     .OrderByDescending(x => x.At)
                     .Select(x => x.Dir)
@@ -133,7 +133,7 @@ namespace ZharpCore
         /// The player's log in a crash folder: Player.log, or under the name -logFile gave it (Unity 6.x
         /// copies it as it was named, and may write no error.log). Its end holds the crash's stack.
         /// </summary>
-        static string PlayerLog(string folder)
+        public static string PlayerLog(string folder)
         {
             try
             {

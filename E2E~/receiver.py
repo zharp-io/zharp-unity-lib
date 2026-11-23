@@ -1,5 +1,5 @@
 """A stand-in for Zharp, for the e2e runs. Appends to <out>/received.jsonl one line per request:
-  OTLP:      {"path", "auth", "gzip", "body"}                    (POST /api/v1/otlp/v1/logs|traces)
+  OTLP:      {"path", "auth", "gzip", "body"}                    (POST /api/v1/otlp/v1/logs|traces, JSON or protobuf)
   artifacts: {"path", "auth", "fields", "files": {name: size}}   (POST /api/v1/applications/<id>/artifacts)
   minidump:  {"path", "query", "fields", "dump": size, "mdmp"}   (POST /api/v1/minidump?key=…)
 The game's own requests (GET /game/…) go to requests.jsonl with their headers; GET /e2e/done?mode=x
@@ -40,6 +40,24 @@ def multipart(body, content_type):
         else:
             fields[name] = data.decode("utf-8", "replace")
     return fields, files
+
+
+def otlp_protobuf(path, body):
+    """OTLP/protobuf (the Zharp iOS SDK sends it) as OTLP/JSON, with opentelemetry-proto when it's
+    installed; else only its size."""
+    try:
+        from google.protobuf.json_format import MessageToDict
+        if path.endswith("/logs"):
+            from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import ExportLogsServiceRequest as Request
+        elif path.endswith("/traces"):
+            from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest as Request
+        else:
+            from opentelemetry.proto.collector.metrics.v1.metrics_service_pb2 import ExportMetricsServiceRequest as Request
+        message = Request()
+        message.ParseFromString(body)
+        return MessageToDict(message)
+    except ImportError:
+        return {"protobuf": len(body)}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -88,7 +106,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             append("received.jsonl", {"path": url.path, "query": urllib.parse.parse_qs(url.query), "fields": fields,
                                       "dump": len(dump), "mdmp": dump[:4] == b"MDMP"})
             return self.reply(200, b"crash-1")
-        entry = {"path": url.path, "auth": self.headers.get("Authorization", ""), "gzip": gz, "body": json.loads(body or b"{}")}
+        if "protobuf" in ctype:
+            parsed = otlp_protobuf(url.path, body)
+        else:
+            parsed = json.loads(body or b"{}")
+        entry = {"path": url.path, "auth": self.headers.get("Authorization", ""), "gzip": gz, "body": parsed}
         append("received.jsonl", entry)
         print("POST", url.path, len(body), flush=True)
         self.reply(200, b"{}")

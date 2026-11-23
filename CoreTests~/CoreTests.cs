@@ -656,6 +656,14 @@ namespace CoreTests
 
             CrashFolders.MarkSent(found);
             Assert.Null(CrashFolders.Newest(root, DateTime.UtcNow.AddMinutes(-10)));
+
+            // A folder the handler left without a dump, with the player log under -logFile's name.
+            string dumpless = Path.Combine(root, "Crash_2026-11-23_111500123");
+            Directory.CreateDirectory(dumpless);
+            File.WriteAllText(Path.Combine(dumpless, "crash-1.log"), "...\n========== END OF STACKTRACE ===========\n");
+            Assert.Null(CrashFolders.Newest(root, DateTime.UtcNow.AddMinutes(-10)));
+            Assert.Equal(dumpless, CrashFolders.Newest(root, DateTime.UtcNow.AddMinutes(-10), withDump: false));
+            Assert.Contains("END OF STACKTRACE", CrashFolders.Tail(CrashFolders.PlayerLog(dumpless), 8000));
         }
 
         [Fact]

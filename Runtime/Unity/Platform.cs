@@ -161,8 +161,21 @@ namespace ZharpUnity
             else if (final || now >= w.Until)
             {
                 waiting = null;
-                NoCrash(runtime, w.Previous, w.Hang);
+                // Unity's handler made a crash folder but wrote no dump (it happens): still the
+                // run's crash, sent as an UncleanExit with the player log's end.
+                string dumpless = CrashFolders.Newest(w.Root, w.Since, withDump: false);
+                if (dumpless != null) CrashedWithoutDump(runtime, w.Previous, dumpless, w.Hang);
+                else NoCrash(runtime, w.Previous, w.Hang);
             }
+        }
+
+        static void CrashedWithoutDump(Runtime runtime, RunMarker previous, string folder, string hang)
+        {
+            if (hang != null) runtime.Debug("the previous run crashed while frozen: hang dropped");
+            string log = CrashFolders.Tail(CrashFolders.PlayerLog(folder), 8000);
+            runtime.Client.ReportUncleanExit(previous, "Unity's crash handler wrote no minidump", log.Length > 0 ? new System.Collections.Generic.Dictionary<string, object> { ["unity.player_log"] = log } : null);
+            CrashFolders.MarkSent(folder);
+            runtime.Debug("the previous run crashed, with no minidump: sending it as an UncleanExit");
         }
 
         static void Crashed(Runtime runtime, RunMarker previous, string folder, string hang)
