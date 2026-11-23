@@ -73,9 +73,19 @@ if scenario in ("error", "web"):
         # a Mono release player has no line numbers at all.
         mono = e["resource"].get("unity.scripting_backend") == "mono"
         mono_release = mono and e["resource"].get("unity.build") == "release"
+        # A native IL2CPP player (not WebGL) builds the stack of a NullReferenceException raised by a
+        # null check from the native stack, and Unity logs it wrong: in run 45243909011 Android and
+        # iOS logged "Shop.Checkout.Charge (at Checkout.cs:47)", a method that had returned, in
+        # Unity's own log too. Zharp sends what Unity logs, so only the class and file are checked.
+        il2cpp_native = e["resource"].get("unity.scripting_backend") == "il2cpp" and e["resource"].get("unity.platform") != "WebGLPlayer"
+        if il2cpp_native:
+            expect(any("Shop.Checkout." in line and "Checkout.cs:" in line for line in stack[1:2]), "the top frame is in Checkout.cs: %s" % stack[:3])
+            if not any("Shop.Checkout.AddToCart" in line for line in stack[1:2]):
+                print("note: IL2CPP put the NullReferenceException at %s" % stack[1:2])
         top = ("Shop.Checkout.AddToCart", "Shop.Checkout.Open") if mono else ("Shop.Checkout.AddToCart",)
-        expect(any(t in line for t in top for line in stack[1:2]), "the top frame is AddToCart: %s" % stack[:3])
-        if scenario == "error" and not mono_release:
+        if not il2cpp_native:
+            expect(any(t in line for t in top for line in stack[1:2]), "the top frame is AddToCart: %s" % stack[:3])
+        if scenario == "error" and not mono_release and not il2cpp_native:
             lines = ("Checkout.cs:24", "Checkout.cs:19") if mono else ("Checkout.cs:24",)
             expect(any(n in line for n in lines for line in stack[1:2]), "line numbers: Checkout.cs:24 in %s" % stack[:3])
         expect(e["a"]["zharp.handled"] == "false", "unhandled")
@@ -141,7 +151,8 @@ elif scenario == "minidump":
         expect(len(d["fields"].get("zharp.session_id", "")) == 32, "the crashed run's session")
         expect(d["fields"].get("zharp.user.id") == "player-42", "the crashed run's player")
         expect(d["fields"].get("screen.name") == "Level", "the crashed run's scene")
-        expect("ForceCrash" in d["fields"].get("unity.player_log", ""), "the player log's end, with the crash's stack")
+        # Mono names the managed frames (ForceCrash); IL2CPP only native ones: the stack itself is checked.
+        expect("END OF STACKTRACE" in d["fields"].get("unity.player_log", ""), "the player log's end, with the crash's stack")
     expect(not of_type("UncleanExit"), "no UncleanExit when the dump was sent")
     expect(not of_type("ApplicationNotResponding"), "no hang for the freeze while the crash handler wrote the dump")
 elif scenario == "upload":

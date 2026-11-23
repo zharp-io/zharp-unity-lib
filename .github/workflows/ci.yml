@@ -40,6 +40,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
@@ -68,6 +69,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
@@ -85,6 +87,25 @@ jobs:
           GUID_FILE=$(find build -name build-guid.txt | head -1)
           touch out/upload/received.jsonl
           python3 "E2E~/check.py" upload out/upload/received.jsonl "" "$GUID_FILE"
+      - name: Diagnose the player's start (temporary)
+        continue-on-error: true
+        run: |
+          pkill -f receiver.py || true
+          PLAYER=$(find build -type f -name 'ShopQuest*' ! -name '*.so' ! -name '*.txt' | head -1)
+          chmod +x "$PLAYER"
+          mkdir -p out/diag
+          ZHARP_ENABLED=false ZHARP_E2E_MODE=logs timeout 60 "$PLAYER" -batchmode -nographics -logFile out/diag/disabled.log; echo "Zharp disabled: exit $?"
+          tail -12 out/diag/disabled.log
+          ZHARP_E2E_MODE=logs timeout 60 "$PLAYER" -batchmode -nographics -logFile out/diag/enabled.log; echo "Zharp enabled: exit $?"
+          ZHARP_DETECT_HANGS=false ZHARP_E2E_MODE=logs timeout 60 "$PLAYER" -batchmode -nographics -logFile out/diag/nohangs.log; echo "Zharp enabled, no watchdog: exit $?"
+          tail -12 out/diag/nohangs.log
+          ZHARP_TRACING=false ZHARP_E2E_MODE=logs timeout 60 "$PLAYER" -batchmode -nographics -logFile out/diag/notracing.log; echo "Zharp enabled, no tracing: exit $?"
+          if command -v gdb >/dev/null; then
+            ZHARP_E2E_MODE=logs timeout 120 gdb -q -batch -ex 'handle SIGPWR SIGXCPU SIG35 SIG36 SIGUSR1 SIGUSR2 nostop noprint pass' -ex run -ex bt -ex 'info symbol $pc' \
+              --args "$PLAYER" -batchmode -nographics -logFile out/diag/gdb.log 2>&1 | tail -40
+          else
+            echo "no gdb"
+          fi
       - name: Player scenarios
         run: |
           pkill -f receiver.py || true
@@ -110,6 +131,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
@@ -151,6 +173,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
@@ -184,6 +207,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
@@ -255,6 +279,7 @@ jobs:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: ${{ env.PROJECT }}
           unityVersion: ${{ matrix.unity }}
